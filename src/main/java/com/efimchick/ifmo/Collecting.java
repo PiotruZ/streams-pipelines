@@ -37,7 +37,10 @@ public class Collecting {
     }
 
     public double histAvg(CourseResult courseResult) {
-        return Stream.concat(Stream.of(0), courseResult.getTaskResults().values().stream()).collect(Collectors.summarizingInt(Integer::intValue)).getAverage();
+        if (courseResult.getTaskResults().size()==4)
+            return progAvg(courseResult);
+        else
+            return Stream.concat(Stream.of(0), courseResult.getTaskResults().values().stream()).collect(Collectors.summarizingInt(Integer::intValue)).getAverage();
     }
 
     public Map<Person, Double> totalScores(Stream<CourseResult> results) {
@@ -120,7 +123,6 @@ public class Collecting {
 
             @Override
             public BiConsumer<List<CourseResult>, CourseResult> accumulator() {
-//                return (personHashMapHashMap, courseResult) -> personHashMapHashMap.put(courseResult.getPerson(),courseResult.getTaskResults());
                 return List::add;
             }
 
@@ -134,27 +136,59 @@ public class Collecting {
 
                 return courseResults -> {
                     String tasks;
+                    Map<String,Integer> programTasks = new TreeMap<>() {{
+                        put("Lab 1. Figures", "Lab 1. Figures".length());
+                        put("Lab 2. War and Peace","Lab 2. War and Peace".length());
+                        put("Lab 3. File Tree","Lab 3. File Tree".length());
+                    }};
+
+                    Map<String,Integer> historyTasks = new TreeMap<>() {{
+                        put("Phalanxing", "Phalanxing".length());
+                        put("Shieldwalling","Shieldwalling".length());
+                        put("Tercioing","Tercioing".length());
+                        put("Wedging","Wedging".length());
+                    }};
+
+                    Map<String,Integer> defaultTaskScores = new HashMap<>(){{
+                        put("Phalanxing", 0);
+                        put("Shieldwalling",0);
+                        put("Tercioing",0);
+                        put("Wedging",0);
+                    }};
+
+                    List<CourseResult> courseResultList = courseResults.stream().map(c -> new CourseResult(c.getPerson(),c.getTaskResults())).collect(Collectors.toList());
+
                     if (areProgramming(courseResults.get(0)))
-                        tasks="Lab 1. Figures | Lab 2. War and Peace | Lab 3. File Tree";
-                    else
-                        tasks="Phalanxing | Shieldwalling | Tercioing | Wedging";
+                        tasks= String.join(" | ", programTasks.keySet());
+                    else {
+                        tasks = String.join(" | ", historyTasks.keySet());
+                        for (CourseResult c: courseResultList
+                        ) {
+                            defaultTaskScores.keySet().forEach(k -> c.getTaskResults().putIfAbsent(k, 0));
+                        }
+                    }
 
                     double averageTotalScore = averageTotalScore(Stream.of(courseResults.toArray(new CourseResult[0])));
 
-                    String summary="\nAverage         |          "+averageScoresPerTask(Stream.of(courseResults.toArray
+                    Person longestName= courseResults.stream().max((e1,e2)->
+                            e1.getPerson().getFirstName().length()+e1.getPerson().getLastName().length() > e2.getPerson().getFirstName().length()+e2.getPerson().getLastName().length() ? 1:-1)
+                            .get().getPerson();
+                    int nameLength = longestName.getFirstName().length()+longestName.getLastName().length();
+
+                    String summary="\n"+String.format(Locale.US,"%-"+(nameLength+1)+"s","Average")+" | "+averageScoresPerTask(Stream.of(courseResults.toArray
                             (new CourseResult[0]))).entrySet().stream()
                             .sorted(Map.Entry.comparingByKey())
-                            .map(t->String.format(Locale.US,"%.2f", t.getValue())).collect(Collectors.joining(" |              "))
+                            .map(t->String.format(Locale.US,"%"+t.getKey().length()+".2f",Double.valueOf(String.format(Locale.US,"%.2f", t.getValue())))).collect(Collectors.joining(" | "))
                             +" | "+String.format(Locale.US,"%.2f",averageTotalScore) +" |    "+mark(averageTotalScore)+" |";
 
-
-                    return "Student         | "+tasks+" | Total | Mark |\n"+courseResults.stream()
+                    return String.format(Locale.US,"%-"+(nameLength+1)+"s","Student")+" | "+tasks+" | Total | Mark |\n"+courseResultList.stream()
                         .sorted(Comparator.comparing(p -> p.getPerson().getLastName()))
-                        .map(D -> D.getPerson().getLastName() + " " + D.getPerson().getFirstName() + " |"+
-                                D.getTaskResults().entrySet().stream().sorted(Map.Entry.comparingByKey()).map(e->e.getValue().toString()).collect(Collectors.joining("              |"))+"              | "+
-                                totalScores(Stream.of(D)).values().stream().map(aDouble -> String.format(Locale.US,"%.2f", aDouble)).collect(Collectors.joining())+"         |    "+
+                        .map(D -> D.getPerson().getLastName() + " " + String.format(Locale.US,"%-"+(nameLength-D.getPerson().getLastName().length())+"s",D.getPerson().getFirstName()) + " | "+
+                                D.getTaskResults().entrySet().stream().sorted(Map.Entry.comparingByKey()).map(e->String.format(Locale.US,"%"+e.getKey().length()+"s",e.getValue().toString())).collect(Collectors.joining(" | "))+" | "+
+                                totalScores(Stream.of(D)).values().stream().map(aDouble -> String.format(Locale.US,"%.2f", aDouble)).collect(Collectors.joining())+" |    "+
                                 String.join("", defineMarks(Stream.of(D)).values()) +" |")
                         .collect(Collectors.joining("\n"))+summary;
+
                 };
             }
 
